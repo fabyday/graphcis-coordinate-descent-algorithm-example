@@ -103,20 +103,29 @@ def bt_line_search(cost_f,idx, x, y, grad_x):
 
     return eta
 
+
+def autograd(cost_function, x, y, eps=1e-7):
+    if len(x.shape) != 1 : 
+        cx = x.reshape(-1, 1)
+    grad_x = np.zeros_like(cx)
+    for i in range(len(grad_x)):
+        fx = cost_function(cx,y)
+        cx[i, 0] += eps 
+        grad_x[i, 0] = (cost_function(cx,y) - fx)/eps
+        cx[i, 0] -= eps 
+    return grad_x
+        
+
 def coordinate_descent(cost_function, init_x, y, iter_nums = 100, eps=10e-7, alpha = 0.01):
     if len(init_x.shape) == 1 : 
         init_x = init_x.reshape(-1, 1)
     x = np.copy(init_x)
     for iter_i in range(iter_nums):
-        for i in range(len(x)):
-            f_val = cost_function(x, y)
-            x[i, 0] += eps
-            f_val_h = cost_function(x,y)
-            f_grad = (f_val_h-f_val)/eps
-            x[i, 0] -= eps
-            alpha = bt_line_search(cost_function, i, x, y, f_grad)
-            x[i, 0] -= f_grad*alpha
-            print("iter : ", iter_i, "i-th of w : ", i,"cost : ", f_val, "grad", f_grad, "alpha : ", alpha, "")
+        f_val = cost_function(x, y)
+        grad = autograd(cost_function, x, y)
+        # alpha = bt_line_search(cost_function, i, x, y, f_grad)
+        x -= grad*alpha
+        print("iter : ", iter_i, "cost : ", f_val, "grad", grad.reshape(-1), "alpha : ", alpha, "")
     return x
 
 
