@@ -8,8 +8,8 @@ def f(x):
 
 def grad(x):
     return 2*x
-# print = opt.line_search(f, f.grad, 1, -f.grad(1))
-
+a = opt.line_search(f, grad, 0.5, -grad(0.5))
+print(a[0])
 
 
 
