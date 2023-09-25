@@ -8,7 +8,7 @@ import numpy as np
 import scipy.optimize as opt
 import math_helper as mhelper
 
-
+np.set_printoptions(precision=5, suppress=True)
 def cost_func(Q, neutral, x, y):
     r1, r2, r3, tx,ty, tz = x.ravel()
 
@@ -80,9 +80,24 @@ def coordinate_descent2(cost_function, Q, neutral, init_x, y, iter_nums = 20, ep
             print("iter : ", iter_i, "i-th of w : ", i,"cost : ", f_val, "\nx", x.ravel(), "alpha : ", alpha, "")
     return x
 
+def guess_Q_cost(guessed_fx, guessed_Rt):
+    global cx, cy
+    pred_Q = mhelper.gen_Q(guessed_fx, cx, cy)
+    print("guessed1")
+    pred_Q, pred_corse_Rt = mhelper.find_camera_matrix(neutral, yy, guessed_projection_Qmat=pred_Q)
+    print("guessed2")
+    pred_Q, pred_corse_Rt = mhelper.find_camera_matrix(neutral, yy)
+    x_rot, y_rot, z_rot = mhelper.decompose_Rt(pred_corse_Rt)
+    tx, ty, tz = pred_corse_Rt[:, -1]
+    x_rot, y_rot, z_rot = mhelper.decompose_Rt(guessed_Rt)
+    tx, ty, tz = guessed_Rt[:, -1]
 
+    init_x= np.array([x_rot, y_rot, z_rot, tx, ty, tz]).reshape(-1).astype(np.float64)
+    # init_x= np.array([1/2*np.pi,np.pi*0.3,0,0,0,-700]).reshape(-1).astype(np.float64)
+    new_cost = cost_func(pred_Q, neutral, init_x, yy)
+    return new_cost
 
-v_size = 10
+v_size = 20
 
 
 fx = 1920/340*240
@@ -97,18 +112,101 @@ neutral[:, -1]  = np.abs(neutral[:, -1])
 
 Rt = mhelper.get_Rt(1/2*np.pi,np.pi*0.3,0,0,0,-700)
 yy= mhelper.add_Rt_to_pts(Q, Rt, neutral)
+print(mhelper.is_orthogonal(Rt[:3,:3]))
+mat_P = Q@Rt
+import scipy
+u,s, vT = np.linalg.svd(mat_P)
+
+c = vT[-1, :] 
+c[:] /= c[-1]
+c = c[:-1]
+M = mat_P[:3,:3]
+K, R = scipy.linalg.rq(M)
+Q = K
+newQ=Q
+#solve flip problem
+if Q[0,0] < 0:
+    Q[0,0] *= -1
+    R[0, :] *= -1
+if Q[1,1] < 0:
+    Q[1,1] *= -1
+    R[1, :] *= -1
+if Q[-1,-1] < 0:
+    Q[:,-1]*=-1
+    R[-1, :] *= -1
 
 
-pred_Q, pred_corse_Rt = mhelper.find_camera_matrix(neutral, yy, guessed_projection_Qmat=Q)
+new_R =np.identity(4)
+print(mhelper.is_orthogonal(R))
+RRR = np.concatenate([R, -R@c.reshape(-1,1)], axis = -1)
+print(RRR)
+print(Rt)
+
+
+max_fx_length = 1920
+min_fx_length =200
+guessed_fx = 200
+size_t = max_fx_length - min_fx_length
+predQ, predRt = mhelper.find_camera_matrix(neutral, yy)
+print("test")
+print(predQ@predRt)
+tes =predQ@predRt
+rat = mat_P[0,0]/tes[0,0]
+print(tes*rat)
+print(mat_P)
+a = guess_Q_cost(min_fx_length, predRt)
+b = guess_Q_cost(max_fx_length, predRt)
+prev_cost = b if a<b else a
+print("ground truth fx : {}".format(fx))
+print("prev_cost : {} , fx size : {} ".format(prev_cost, max_fx_length if a < b else a))
+for _ in range(100):
+    size_t *= 0.5
+
+    g_fx_left = guessed_fx-size_t if guessed_fx - size_t >= min_fx_length else min_fx_length
+    g_fx_right = guessed_fx+size_t if guessed_fx + size_t < max_fx_length else max_fx_length
+    prev_cost_copy = prev_cost
+    new_cost_left = guess_Q_cost( g_fx_left, predRt)
+    new_cost_right = guess_Q_cost( g_fx_right, predRt)
+
+    if new_cost_left < new_cost_right:
+        if new_cost_left < prev_cost:
+            prev_cost = new_cost_left 
+            guessed_fx = g_fx_left
+    else:
+        if new_cost_right < prev_cost:
+            prev_cost = new_cost_left 
+            guessed_fx = g_fx_right
+    print("prev_cost : {} , new_cost left : {}, new_cost_right {}, guessed fx size : {} "\
+          .format(prev_cost_copy, new_cost_left, new_cost_right, guessed_fx))
+
+
+
+import matplotlib.pyplot as plt 
+
+x = np.linspace(1,2000, 2000)
+p_y = []
+for xx in x:
+    res = guess_Q_cost(xx,predRt)
+    p_y.append(res)
+plt.plot(x, np.array(p_y).ravel(), '.-')
+# a.margins(y=20,tight=False)
+plt.show()
+
+
+print("test")
+
+
+pred_Q, pred_corse_Rt = mhelper.find_camera_matrix(neutral, yy)
 x_rot, y_rot, z_rot = mhelper.decompose_Rt(pred_corse_Rt)
 tx, ty, tz = pred_corse_Rt[:, -1]
+
 init_x= np.array([x_rot, y_rot, z_rot, tx, ty, tz]).reshape(-1).astype(np.float64)
 rr = coordinate_descent2(cost_func, pred_Q, neutral, init_x, yy)
 print("reslt :\n", rr)
 
 
 pred_Rt = mhelper.get_Rt(*rr.ravel())
-result = mhelper.add_Rt_to_pts(Q, Rt, neutral)
+result = mhelper.add_Rt_to_pts(pred_Q, pred_Rt, neutral)
 print("pred: \n", result)
 print("gt : \n",yy)
 

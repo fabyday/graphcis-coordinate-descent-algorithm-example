@@ -67,6 +67,7 @@ def get_Rt(theta_x, theta_y, theta_z, tx, ty, tz):
 
     res[:, -1] = np.array([tx, ty, tz])
     res[:3, :3] =Rz@Ry@Rx
+
     return res
 
 def add_Rt_to_pts(Q, Rt, x):
@@ -136,6 +137,13 @@ def coordinate_descent2(cost_function, neutral, init_x, y, iter_nums = 100, eps=
             print("iter : ", iter_i, "i-th of w : ", i,"cost : ", f_val, "grad", gradient_direction, "alpha : ", alpha, "")
     return x
 
+def is_orthogonal(mat):
+    dot_product = np.dot(mat, mat.T)
+    # create an identity matrix of the same shape as ar2
+    identity_matrix = np.identity(len(mat))
+    # check if matrix is orthogonal
+    return np.allclose(dot_product, identity_matrix)
+
 def find_camera_matrix(x_3d, x_2d, guessed_projection_Qmat = None):
     # P_{0} @ X - 
     # 12 unknown
@@ -165,7 +173,7 @@ def find_camera_matrix(x_3d, x_2d, guessed_projection_Qmat = None):
     for idx in range(len(x_3d)):
         add_coeff_to_A(mat, x_3d, x_2d, idx)
 
-    u, s, vT = np.linalg.svd(mat.T@mat)
+    u, s, vT = np.linalg.svd(mat)
     sol = vT[-1, :]
     
     
@@ -183,17 +191,40 @@ def find_camera_matrix(x_3d, x_2d, guessed_projection_Qmat = None):
         Q = guessed_projection_Qmat
         Qinv = np.linalg.inv(Q)
         Rt = Qinv@mat_P
+        print(is_orthogonal(Rt[:3,:3]))
+        print(is_orthogonal(Q))
+
     else:
         # if we don't knonw
         u,s, vT = np.linalg.svd(mat_P)
+                
+        # c = vT[-1, :] 
         c = vT[-1, :] 
+        c[:] /= c[-1]
+        c = c[:-1] #remove hormogeneous to 3d pts
+
         M = mat_P[:3,:3]
         K, R = scipy.linalg.rq(M)
         Q = K
+
+        #solve flip problem
+        if Q[0,0] < 0:
+            Q[0,0] *= -1
+            R[0, :] *= -1
+        if Q[1,1] < 0:
+            Q[1,1] *= -1
+            R[1, :] *= -1
+        if Q[-1,-1] < 0:
+            Q[:,-1]*=-1
+            R[-1, :] *= -1
+        
         # [R, -Rc]
-        Rt = np.concatenate([R, -R@c.reshape(-1,1)[:-1, :]], axis = -1)
+        # Rt = np.concatenate([R, -R@c.reshape(-1,1)[:-1, :]], axis = -1)
+        Rt = np.concatenate([R, -R@c.reshape(-1,1)], axis = -1)
+        print(is_orthogonal(Rt[:3,:3]))
 
-
+        print(is_orthogonal(Q))
+    print("gen P : \n", Q@Rt, "\norig : \n",mat_P)
     return Q, Rt
 
 
