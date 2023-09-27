@@ -231,15 +231,15 @@ def find_camera_matrix(x_3d, x_2d, guessed_projection_Qmat = None):
 import matplotlib.pyplot as plt 
 def cost_function_visualizer_for_param(cost_function, x_size, start, end, size):
     xx = np.linspace(start,end,size)
-    s = np.zeros((x_size,1))
+    s = np.zeros((x_size,1)).astype(np.float64)
     fig, axes = plt.subplots(nrows=x_size)
-    p_y = []
     for i, ax in enumerate(axes):
+        p_y = []
         for uu, x in enumerate(xx):
             s[i, 0] = x
-            res = cost_function(x)
+            res = cost_function(s)
             p_y.append(res)
-        ax.plot(x, np.array(p_y).ravel())
+        ax.plot(xx, np.array(p_y).ravel())
         s[i, 0] = 0
     plt.show()
 
